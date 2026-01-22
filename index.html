@@ -333,7 +333,7 @@
             <option value="flight_cx">🌲 國泰官網</option>
             <option value="flight_other">✈️ 其他航空</option>
           </select>
-          <input type="text" id="keyword-input" class="form-control" placeholder="輸入店家關鍵字 (如: Agoda, 分期, 小額)..." style="font-size:0.9rem;">
+          <input type="text" id="keyword-input" class="form-control" placeholder="輸入店家關鍵字 (如: 麥當勞, 停車, 分期, 管理費)..." style="font-size:0.9rem;">
         </div>
 
         <button onclick="calculate()" class="btn-action">開始計算 <i class="fa-solid fa-calculator ms-2"></i></button>
@@ -450,7 +450,7 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     /* =========================
-       哩程攻略 v10.0 (銀行防呆全開版)
+       哩程攻略 v10.0 (Final - NCCC & 管理費全封鎖)
        ========================= */
 
     // 【重要】請在此處更新資料庫時間
@@ -509,19 +509,28 @@
     // 中信鼎尊 加碼關鍵字 (訂房網)
     const CTBC_BOOKING_KEYWORDS = ['agoda','booking','hotels.com','expedia','trip.com','airbnb'];
     
-    // v10.0 黑名單邏輯 (四卡全殺：管理費、社區、小額)
+    // NCCC 速食白名單 (Live+ 專用)
+    const NCCC_FAST_FOOD = ['麥當勞','肯德基','漢堡王','摩斯','頂呱呱','必勝客','達美樂','拿坡里','subway'];
     
-    // 中信: 原有名單 + 小額
-    const CTBC_BLOCK = ['全聯','px','全支付','7-11','711','全家','萊爾富','ok超商','繳費','稅','學費','水費','電費','瓦斯','管理費','社區','罰','規費','健保','電信','中華電信','遠傳','台灣大','儲值','etoro','wise','revolut','分期','預借','小額'];
-    
-    // 匯豐: 原有名單 + 小額
-    const HSBC_BLOCK = ['全聯','px','7-11','711','全家','萊爾富','ok超商','繳費','稅','學費','水費','電費','瓦斯','管理費','社區','罰','規費','判決書','醫療','健保','掛號','儲值','預借','年費','手續費','賭博','小額'];
-    
-    // 台新: 原有名單 + 小額
-    const TAISHIN_BLOCK = ['分期','全聯','px','7-11','711','全家','萊爾富','ok超商','繳費','稅','學費','水費','電費','瓦斯','管理費','社區','罰','規費','健保','國民年金','etag','三商美邦','小額'];
+    // NCCC 通用黑名單 (飲料、生活、停車)
+    const NCCC_GENERAL = ['八方雲集','爭鮮','路易莎','louisa','cama','50嵐','清心','迷客夏','可不可','美廉社','停車','嘟嘟房','台灣聯通','viptime','小額'];
 
-    // CUBE: 黑名單 (LinePay與分期是降級，這些是歸零)
-    const CUBE_BLOCK = ['管理費','社區','稅','學費','水費','電費','瓦斯','規費','罰','健保','etag','賭博','小額','全聯','px','7-11','全家'];
+    // 共同黑名單元素
+    const COMMON_BLOCK = ['管理費','社區','稅','學費','水費','電費','瓦斯','罰','規費','健保','電信','中華電信','遠傳','台灣大','儲值','預借','分期'];
+
+    // 各卡完整黑名單組裝
+    // 中信: 全聯/超商 + 共同 + NCCC全套 + 支付平台
+    const CTBC_BLOCK = [...COMMON_BLOCK, '全聯','px','全支付','7-11','711','全家','萊爾富','ok超商','繳費','etoro','wise','revolut', ...NCCC_FAST_FOOD, ...NCCC_GENERAL];
+    
+    // 匯豐: 全聯/超商 + 共同 + NCCC (Live+另有白名單邏輯) + 醫療/賭博
+    const HSBC_BLOCK_BASE = [...COMMON_BLOCK, '全聯','px','7-11','711','全家','萊爾富','ok超商','繳費','判決書','醫療','掛號','年費','手續費','賭博'];
+    
+    // 台新: 全聯/超商 + 共同 + NCCC全套 + eTag/三商美邦
+    const TAISHIN_BLOCK = [...COMMON_BLOCK, '全聯','px','7-11','711','全家','萊爾富','ok超商','繳費','國民年金','etag','三商美邦', ...NCCC_FAST_FOOD, ...NCCC_GENERAL];
+    
+    // CUBE: 全聯/超商 + 共同 + NCCC全套 + eTag/賭博/投資
+    const CUBE_BLOCK = [...COMMON_BLOCK, '全聯','px','7-11','711','全家','萊爾富','ok超商','規費','路邊停車','醫療','etag','etoro','wise','賭博', ...NCCC_FAST_FOOD, ...NCCC_GENERAL];
+
 
     // --- 狀態管理 ---
     const DB_KEY = 'MILES_APP_V8_DATA';
@@ -544,7 +553,7 @@
       };
     }
 
-    // --- 計算核心 (v10.0) ---
+    // --- 計算核心 (v10.0 Final) ---
 
     function calculate() {
       const db = loadDB();
@@ -553,7 +562,7 @@
       
       const curr = $('currency').value;
       const isForeign = curr !== 'TWD';
-      const isEUR = curr === 'EUR'; // 判斷是否為歐元
+      const isEUR = curr === 'EUR'; 
       const rate = RATES[curr] || 1;
       const twdBase = Math.round(amt * rate);
       const twdSpend = isForeign ? Math.round(twdBase * 1.015) : twdBase;
@@ -563,7 +572,6 @@
       const kw = ($('keyword-input').value || '').toLowerCase();
       const isBirthday = $('birthdayMode').checked;
       const isFlyMode = $('flyMode').checked;
-      
       const target = $('redemption-target').value; 
 
       let tags = [];
@@ -574,7 +582,7 @@
       let cubePlan = 'unknown';
       let isLiveSelect = false;
 
-      // CUBE Plan Detection
+      // CUBE
       if(isForeign || cat==='travel' || cat.startsWith('flight')) cubePlan = 'travel';
       else {
         for(let p in CUBE_KEYWORDS) {
@@ -583,7 +591,7 @@
         if(cubePlan==='unknown' && cat==='dining') cubePlan = 'dining';
       }
 
-      // Live+ Detection
+      // Live+
       if(cat==='dining') isLiveSelect = true;
       else {
         if(
@@ -594,6 +602,10 @@
           isLiveSelect = true;
         }
       }
+      
+      // Live+ 特別判定：速食是否在白名單
+      const isLiveFastFood = NCCC_FAST_FOOD.some(w => kw.includes(w));
+      if(isLiveFastFood) isLiveSelect = true; // 強制視為精選
 
       // 中信訂房網偵測
       const isCtbcBooking = CTBC_BOOKING_KEYWORDS.some(w => kw.includes(w));
@@ -604,33 +616,26 @@
 
       let results = [];
 
-      // 1. 國泰 CUBE (三層過濾網)
+      // 1. 國泰 CUBE (三層過濾)
       if(db.settings.enabledBuiltins.includes('cube')) {
-        let pRate = 0.003; 
-        let planName = '一般消費(0.3%)';
-        const planMap = { 'travel':'趣旅行', 'dining':'樂饗購', 'digital':'玩數位', 'select':'集精選' };
-        
         let miles = 0;
         let note = '';
-        let isZero = false;
-
-        // 第一層：直接歸零
+        
+        // Layer 1: 直接歸零 (黑名單)
         if (CUBE_BLOCK.some(w => kw.includes(w))) {
-            miles = 0;
-            note = `<span class="text-danger fw-bold">🚫 非回饋項目</span>`;
-            isZero = true;
-        }
-
-        // 第二層：強制降級 (LinePay 或 分期)
-        if (!isZero) {
-            if (pay === 'line_pay') {
-                pRate = 0.003; 
-                planName = `一般消費 (LinePay無加碼)`;
-            } else if (kw.includes('分期')) {
-                pRate = 0.003; 
-                planName = `一般消費 (分期無加碼)`;
+             miles = 0; note = `<span class="text-danger fw-bold">🚫 非回饋項目</span>`;
+        } else {
+            // Layer 2: 強制降級 (LinePay / 分期)
+            let pRate = 0.003; 
+            let planName = '一般消費(0.3%)';
+            const isDowngrade = (pay === 'line_pay') || kw.includes('分期');
+            
+            if (isDowngrade) {
+                pRate = 0.003;
+                planName = '一般消費 (支付/分期限制)';
             } else {
-                // 第三層：權益加碼
+                // Layer 3: 權益判斷
+                const planMap = { 'travel':'趣旅行', 'dining':'樂饗購', 'digital':'玩數位', 'select':'集精選' };
                 if(cubePlan !== 'unknown' && planMap[cubePlan]) {
                   pRate = 0.03;
                   planName = `切換至【${planMap[cubePlan]}】(3%)`;
@@ -646,23 +651,34 @@
                 noteSuffix = `720點⇄1000哩 (華航)`;
             } else {
                 miles = Math.floor(rawPoints * (1000 / 360));
-                noteSuffix = `360點⇄1000哩 (亞萬/長榮)`;
+                noteSuffix = `360點⇄1000哩 (亞萬)`;
             }
             note = `${planName}<br><span class="text-muted small">${noteSuffix}</span>`;
         }
-        
         results.push({ id:'cube', name:'國泰 CUBE', miles: miles, note: note, type:'mile' });
       }
 
-      // 2. 匯豐 Live+ (歐盟死刑 + 黑名單)
+      // 2. 匯豐 Live+ (歐盟死刑 + 黑名單 + 速食白名單)
       if(db.settings.enabledBuiltins.includes('hsbc_live')) {
         let miles = 0;
         let note = '';
         
+        // 檢查黑名單 (先檢查是否為速食白名單，若是則跳過 NCCC 檢查)
+        let isBlocked = false;
+        
         if (isEUR) {
-            miles = 0; note = `<span class="text-danger fw-bold">🚫 歐盟實體不回饋</span>`;
-        } else if (HSBC_BLOCK.some(w => kw.includes(w))) {
-            miles = 0; note = `<span class="text-danger fw-bold">🚫 非回饋項目</span>`;
+            isBlocked = true; note = `<span class="text-danger fw-bold">🚫 歐盟實體不回饋</span>`;
+        } else if (HSBC_BLOCK_BASE.some(w => kw.includes(w))) {
+            isBlocked = true; note = `<span class="text-danger fw-bold">🚫 非回饋項目</span>`;
+        } else if (NCCC_GENERAL.some(w => kw.includes(w))) { // 一般NCCC必死
+            isBlocked = true; note = `<span class="text-danger fw-bold">🚫 小額支付不回饋</span>`;
+        } else if (NCCC_FAST_FOOD.some(w => kw.includes(w))) { // 速食NCCC
+             // Live+ 例外放行，不設為 Blocked
+             isBlocked = false;
+        }
+
+        if (isBlocked) {
+            miles = 0;
         } else {
             // 正常計算
             let displayRate = '0.88%';
@@ -671,7 +687,7 @@
             const hasAutopay = db.settings.hsbc_autopay;
             let totalPoints = twdBase * 0.0088; 
             
-            if(isLiveSelect) {
+            if(isLiveSelect) { // 含速食
                displayType = '精選';
                displayRate = '3.88%';
                let bonus1 = twdBase * 0.03;
@@ -731,7 +747,7 @@
         results.push({ id:'ctbc_ci', name:'中信 華航', miles: miles, note: note, type:'mile' });
       }
 
-      // 5. 台新 國泰世界 (分期死刑 + 黑名單 + 歐盟豁免)
+      // 5. 台新 國泰世界 (分期死刑 + 黑名單)
       if(db.settings.enabledBuiltins.includes('taishin_cx')) {
         let miles = 0;
         let note = '';
@@ -740,6 +756,7 @@
              miles = 0; 
              note = `<span class="text-danger fw-bold">🚫 非回饋項目/分期</span>`;
         } else {
+            // 正常計算 (歐盟EUR也算在內)
             let div = isForeign ? 15 : 22; 
             note = `約${div}元/哩`;
             const isMobilePay = (pay === 'apple_pay' || pay === 'line_pay');
@@ -756,12 +773,15 @@
         results.push({ id:'taishin_cx', name:'台新 國泰', miles: miles, note: note, type:'mile' });
       }
 
-      // 6. 匯豐 旅人 (黑名單 + 歐盟豁免)
+      // 6. 匯豐 旅人 (黑名單 + NCCC全死)
       if(db.settings.enabledBuiltins.includes('hsbc_inf')) {
         let miles = 0;
         let note = '';
         
-        if (HSBC_BLOCK.some(w => kw.includes(w))) {
+        // 旅人卡沒有速食白名單，所以 NCCC 全殺
+        const TRAVELER_BLOCK = [...HSBC_BLOCK_BASE, ...NCCC_FAST_FOOD, ...NCCC_GENERAL];
+
+        if (TRAVELER_BLOCK.some(w => kw.includes(w))) {
              miles = 0; note = `<span class="text-danger fw-bold">🚫 非回饋項目</span>`;
         } else {
             let div = isForeign ? 10 : 18;
@@ -797,7 +817,7 @@
         return;
       }
       list.forEach((c, idx) => {
-        const isWinner = idx === 0 && c.miles > 0; // 只有大於0哩才能當Winner
+        const isWinner = idx === 0;
         const div = document.createElement('div');
         div.className = `plan-card ${isWinner ? 'plan-winner' : ''}`;
         let badge = isWinner ? `<span class="winner-badge"><i class="fa-solid fa-crown"></i> WINNER</span>` : '';
@@ -810,7 +830,7 @@
             </div>
             <div class="text-end">
               <div class="card-miles">${c.miles} <small style="font-size:0.5em; color:#64748b;">哩</small></div>
-              <div class="card-tpm">${c.miles > 0 ? (c.tpm < 100 ? c.tpm.toFixed(1) : '>100') : '-'} 元/哩</div>
+              <div class="card-tpm">${c.tpm < 100 ? c.tpm.toFixed(1) : '>100'} 元/哩</div>
             </div>
           </div>
         `;
@@ -829,7 +849,6 @@
     function recordResult() {
       if(!window.currentBest) return;
       const { id, name, miles, twdSpend, twdBase } = window.currentBest;
-      if(miles === 0) return alert('無法記帳：回饋為 0 哩');
       if(!confirm(`確定記帳？\n卡片：${name}\n累積：${miles} 哩`)) return;
 
       const db = loadDB();
