@@ -11,7 +11,7 @@
 
   <style>
     /* =========================
-       CSS 樣式表 (v10.0 Monitoring+)
+       CSS 樣式表 (v10.0 Final+)
        ========================= */
     :root {
       --bg-main: #fffdf9;
@@ -192,6 +192,12 @@
       text-decoration: none;
       box-shadow: 2px 2px 0 rgba(245, 158, 11, 0.2);
     }
+    
+    /* Currency Warning */
+    #currency-warning {
+      color: #ef4444; font-size: 0.8rem; font-weight: 700;
+      margin-top: 4px; display: none; font-family: var(--font-hand);
+    }
 
     /* Bottom Nav */
     .nav-bottom {
@@ -320,12 +326,13 @@
           <div class="input-group">
             <input type="number" id="amount" class="form-control" placeholder="0" inputmode="decimal">
           </div>
+          <div id="currency-warning"><i class="fa-solid fa-circle-exclamation me-1"></i> 匯率未知，請直接輸入等值台幣金額</div>
         </div>
 
         <div class="row g-2 mb-3">
           <div class="col-6">
             <label class="form-label">幣別</label>
-            <select id="currency" class="form-select">
+            <select id="currency" class="form-select" onchange="checkCurrency(this.value)">
               <option value="TWD">🇹🇼 TWD</option>
               <option value="JPY">🇯🇵 JPY</option>
               <option value="USD">🇺🇸 USD</option>
@@ -410,7 +417,7 @@
       <div class="card-box mt-3" style="background:#fffbeb; border-color:#fde68a;">
         <h5 class="mb-3 text-warning" style="color:#b45309;"><i class="fa-solid fa-shield-halved me-2"></i>上限小管家</h5>
         <div id="limits-container"></div>
-        <small class="text-muted d-block mt-2 text-center font-hand">上限會根據設定的結帳日自動重置</small>
+        <small class="text-muted d-block mt-2 text-center font-hand">台新卡為年度額度，其他卡片會根據結帳日重置</small>
       </div>
       
        <div class="disclaimer-text">
@@ -485,7 +492,7 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     /* =========================
-       哩程攻略 v10.0 (Final - Precision Monitoring)
+       哩程攻略 v10.0 (Final - Ultimate)
        ========================= */
 
     const DB_UPDATE_DATE = "2026/01/30"; 
@@ -582,6 +589,22 @@
 
     // --- 計算核心 ---
 
+    function checkCurrency(val) {
+      const warn = document.getElementById('currency-warning');
+      const input = document.getElementById('amount');
+      const isOther = (val === 'other');
+      
+      if (isOther) {
+        warn.style.display = 'block';
+        input.placeholder = '請輸入折算台幣';
+        input.style.borderColor = '#ef4444';
+      } else {
+        warn.style.display = 'none';
+        input.placeholder = '0';
+        input.style.borderColor = '#cbd5e1';
+      }
+    }
+
     function calculate() {
       const db = loadDB();
       const amt = parseFloat($('amount').value);
@@ -590,8 +613,11 @@
       const curr = $('currency').value;
       const isForeign = curr !== 'TWD';
       const isEUR = curr === 'EUR'; 
+      // 若為 'other'，rate 預設為 1 (使用者已輸入台幣)
       const rate = RATES[curr] || 1;
+      
       const twdBase = Math.round(amt * rate);
+      // 若為外幣(含other)，預估 1.5% 手續費
       const twdSpend = isForeign ? Math.round(twdBase * 1.015) : twdBase;
 
       const cat = $('category').value;
@@ -886,17 +912,28 @@
       const now = new Date();
       const monthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
       
+      // 1. 寫入歷史紀錄 (依月份)
       if(!db.records[monthKey]) db.records[monthKey] = {};
       if(!db.records[monthKey][id]) db.records[monthKey][id] = { miles:0, spend:0, name };
       db.records[monthKey][id].miles += miles;
       db.records[monthKey][id].spend += twdSpend;
 
-      let day = db.settings.billingDays[id.split('_')[0]] || db.settings.billingDays['other'] || 1;
-      const cycleKey = getBillingCycle(null, day); 
-      const limitKey = `${cycleKey}-${id}`;
-      if(!db.limits[limitKey]) db.limits[limitKey] = { spend:0, points:0, startDay: day };
-      
-      // 精準監控邏輯：台新卡只有在符合 $5/哩 時才計入額度
+      // 2. 寫入上限監控 (分流邏輯)
+      let limitKey = '';
+      if(id === 'taishin_cx') {
+          // 台新使用「年份」作為 Key
+          const yearKey = now.getFullYear().toString();
+          limitKey = `${yearKey}-${id}`;
+          if(!db.limits[limitKey]) db.limits[limitKey] = { spend:0, points:0, startDay: 1 };
+      } else {
+          // 其他卡片使用「帳單週期」作為 Key
+          let day = db.settings.billingDays[id.split('_')[0]] || db.settings.billingDays['other'] || 1;
+          const cycleKey = getBillingCycle(null, day); 
+          limitKey = `${cycleKey}-${id}`;
+          if(!db.limits[limitKey]) db.limits[limitKey] = { spend:0, points:0, startDay: day };
+      }
+
+      // 台新精準監控：只有符合 $5/哩 才計入額度
       let shouldAddSpend = true;
       if(id === 'taishin_cx' && !isFlyQualifying) {
           shouldAddSpend = false;
@@ -942,13 +979,25 @@
         { id: 'taishin_cx',name: '台新 國泰',  limit: 1000000, type:'spend' } 
       ];
       targets.forEach(t => {
-        const prefix = t.id.split('_')[0];
-        const day = db.settings.billingDays[prefix] || 1;
-        const cycleKey = getBillingCycle(null, day);
-        const dataKey = `${cycleKey}-${t.id}`;
-        const record = db.limits[dataKey] || { spend:0, points:0 };
+        // 取值邏輯分流
+        let current = 0;
+        let noteText = '';
         
-        const current = record.spend; 
+        if(t.id === 'taishin_cx') {
+            const yearKey = now.getFullYear().toString();
+            const dataKey = `${yearKey}-${t.id}`;
+            const record = db.limits[dataKey] || { spend:0 };
+            current = record.spend;
+            noteText = '本年度累積 (不隨帳單重置)';
+        } else {
+            const prefix = t.id.split('_')[0];
+            const day = db.settings.billingDays[prefix] || 1;
+            const cycleKey = getBillingCycle(null, day);
+            const dataKey = `${cycleKey}-${t.id}`;
+            const record = db.limits[dataKey] || { spend:0 };
+            current = record.spend;
+            noteText = `結帳日: 每月${day}號 (本期: ${cycleKey})`;
+        }
         
         const percent = Math.min(100, Math.round((current / t.limit) * 100));
         let color = 'bg-success';
@@ -969,7 +1018,7 @@
               <div class="progress-bar ${color}" style="width: ${percent}%; border-radius:4px;"></div>
             </div>
             ${subMsg}
-            <div class="text-end text-muted mt-1" style="font-size:0.7rem; font-family:var(--font-hand);">結帳日: 每月${day}號 (本期: ${cycleKey})</div>
+            <div class="text-end text-muted mt-1" style="font-size:0.7rem; font-family:var(--font-hand);">${noteText}</div>
           </div>
         `;
       });
