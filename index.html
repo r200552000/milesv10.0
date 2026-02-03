@@ -501,7 +501,7 @@
        哩程攻略 v10.0 (Final - Ultimate 02/03)
        ========================= */
 
-    const DB_UPDATE_DATE = "2026/02/03"; 
+    const DB_UPDATE_DATE = "2026/02/04"; 
 
     // 已移除 DBS
     const BUILTIN_DEFS = [
@@ -625,12 +625,24 @@
       const curr = $('currency').value;
       const isForeign = curr !== 'TWD'; // 只要不是TWD，其他(other)也視為Foreign
       const isEUR = curr === 'EUR'; 
+      const isOther = curr === 'other';
       // 若為 'other'，rate 預設為 1 (使用者已輸入台幣)
       const rate = RATES[curr] || 1;
       
-      const twdBase = Math.round(amt * rate);
-      // 若為外幣(含other)，預估 1.5% 手續費
-      const twdSpend = isForeign ? Math.round(twdBase * 1.015) : twdBase;
+      let twdBase = 0;
+      let twdSpend = 0;
+
+      if (isOther) {
+          // 其他幣別：使用者輸入的是「帳單台幣金額」(含1.5%手續費)
+          twdSpend = Math.round(amt); 
+          // 逆向回推刷卡本金 (因為銀行是按本金給哩程)
+          twdBase = Math.round(twdSpend / 1.015);
+      } else {
+          // 一般外幣或台幣：輸入的是商品原價
+          twdBase = Math.round(amt * rate);
+          // 若是外幣，計算成本時要加 1.5%
+          twdSpend = isForeign ? Math.round(twdBase * 1.015) : twdBase;
+      }
 
       const cat = $('category').value;
       const pay = $('payment').value;
@@ -871,7 +883,7 @@
       // 排序
       results.forEach(r => { r.tpm = r.miles > 0 ? (twdSpend / r.miles) : 999; });
       results.sort((a,b) => b.miles - a.miles);
-      window.currentBest = { ...results[0], twdSpend, twdBase };
+      window.currentBest = { ...results[0], twdSpend, twdBase, isFlyQualifying };
       renderResults(results, twdSpend);
     }
 
