@@ -329,7 +329,7 @@
           <div id="currency-warning"><i class="fa-solid fa-circle-exclamation me-1"></i> 匯率未知，請直接輸入等值台幣金額</div>
         </div>
 
-        <div class="row g-2 mb-3">
+        <div class="row g-2 mb-1">
           <div class="col-6">
             <label class="form-label">幣別</label>
             <select id="currency" class="form-select" onchange="checkCurrency(this.value)">
@@ -341,6 +341,9 @@
               <option value="THB">🇹🇭 THB</option>
               <option value="CNY">🇨🇳 CNY</option>
               <option value="SGD">🇸🇬 SGD</option>
+              <option value="MOP">🇲🇴 MOP (澳門)</option>
+              <option value="VND">🇻🇳 VND (越南)</option>
+              <option value="IDR">🇮🇩 IDR (印尼)</option>
               <option value="other">🌏 其他</option>
             </select>
           </div>
@@ -353,6 +356,9 @@
               <option value="line_pay">🟩 LINE Pay</option>
             </select>
           </div>
+        </div>
+        <div class="text-muted small mt-1 mb-2 ms-1" style="font-size: 0.75rem;">
+          <i class="fa-solid fa-circle-info me-1"></i> 匯率以過往均值計算，若要精準金額，選「其他」並手動輸入帳單台幣金額是最準
         </div>
 
         <div class="mb-3">
@@ -492,10 +498,10 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     /* =========================
-       哩程攻略 v10.0 (Final - Ultimate)
+       哩程攻略 v10.0 (Final - Ultimate 02/03)
        ========================= */
 
-    const DB_UPDATE_DATE = "2026/01/30"; 
+    const DB_UPDATE_DATE = "2026/02/03"; 
 
     // 已移除 DBS
     const BUILTIN_DEFS = [
@@ -507,7 +513,13 @@
     ];
 
     const DEFAULT_BILLING = { hsbc:6, cube:18, ctbc:15, taishin:20, other:1 };
-    const RATES = { TWD:1, USD:33.5, JPY:0.225, EUR:36, CNY:4.6, KRW:0.025, THB:0.96, SGD:24.5 };
+    // 2026/02/03 參考匯率
+    const RATES = { 
+        TWD:1, USD:33.5, JPY:0.225, EUR:36, CNY:4.6, KRW:0.025, THB:0.96, SGD:24.5,
+        MOP:4.0,    // 澳門幣 參考
+        VND:0.0013, // 越南盾 參考
+        IDR:0.0021  // 印尼盾 參考
+    };
     
     const CUBE_KEYWORDS = {
       'travel': ['travel','agoda','booking','hotels','airbnb','klook','kkday','雄獅','可樂','flight','航空','機票','海外','foreign'],
@@ -611,7 +623,7 @@
       if(!amt) return alert('請輸入金額');
       
       const curr = $('currency').value;
-      const isForeign = curr !== 'TWD';
+      const isForeign = curr !== 'TWD'; // 只要不是TWD，其他(other)也視為Foreign
       const isEUR = curr === 'EUR'; 
       // 若為 'other'，rate 預設為 1 (使用者已輸入台幣)
       const rate = RATES[curr] || 1;
